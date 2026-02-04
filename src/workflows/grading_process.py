@@ -83,28 +83,23 @@ class GradingProcess:
             logger.info("Iniciando auditoría con IA...")
             final_markdown, tokens = chat_service.execute_grading_flow(patient_pdfs)
 
-            # D. Subir Resultado a Drive
+            # D. Subir Resultado a Drive (usando OAuth para evitar problemas de cuota)
             output_filename = f"GRADING_{client_name.replace(' ', '_')}_{row_data['client_id']}.md"
             output_path = os.path.join(temp_dir, output_filename)
             
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(final_markdown)
             
-            # Subir a la carpeta de resultados (Markdown)
-            drive = google_manager.get_drive_service()
+            # Subir a la carpeta de resultados usando OAuth
             file_metadata = {
                 'name': output_filename,
                 'parents': [Config.DRIVE_OUTPUT_FOLDER_ID]
             }
-            media = google_manager.upload_file(output_path, file_metadata) # Usamos helper o directo
-            # Nota: Si upload_file no está en tu google_client, aquí uso lógica estándar:
-            from googleapiclient.http import MediaFileUpload
-            media_body = MediaFileUpload(output_path, mimetype='text/markdown')
-            uploaded_file = drive.files().create(
-                body=file_metadata,
-                media_body=media_body,
-                fields='id, webViewLink'
-            ).execute()
+            uploaded_file = google_manager.upload_file(
+                output_path, 
+                file_metadata,
+                mime_type='text/markdown'
+            )
             
             grading_link = uploaded_file.get('webViewLink')
 

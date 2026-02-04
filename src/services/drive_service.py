@@ -5,6 +5,19 @@ from googleapiclient.http import MediaIoBaseDownload  # <-- CORREGIDO AQUÍ
 from googleapiclient.errors import HttpError
 from fpdf import FPDF
 from src.core.google_client import google_manager
+from src.config import Config
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log
+)
+from google.api_core.exceptions import (
+    GoogleAPIError,
+    InternalServerError,
+    ServiceUnavailable
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +30,21 @@ class DriveService:
     def __init__(self):
         self.service = google_manager.get_drive_service()
 
+    @retry(
+        stop=stop_after_attempt(Config.MAX_RETRIES),
+        wait=wait_exponential(
+            multiplier=1,
+            min=Config.RETRY_MIN_WAIT,
+            max=Config.RETRY_MAX_WAIT
+        ),
+        retry=retry_if_exception_type((
+            HttpError,
+            GoogleAPIError,
+            TimeoutError,
+            ConnectionError
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING)
+    )
     def get_file_metadata(self, file_id):
         """Obtiene el nombre y tipo MIME de un archivo."""
         try:
@@ -29,6 +57,21 @@ class DriveService:
             logger.error(f"Error obteniendo metadata para {file_id}: {e}")
             raise
 
+    @retry(
+        stop=stop_after_attempt(Config.MAX_RETRIES),
+        wait=wait_exponential(
+            multiplier=1,
+            min=Config.RETRY_MIN_WAIT,
+            max=Config.RETRY_MAX_WAIT
+        ),
+        retry=retry_if_exception_type((
+            HttpError,
+            GoogleAPIError,
+            TimeoutError,
+            ConnectionError
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING)
+    )
     def download_as_pdf(self, file_id, output_path):
         """
         Descarga un archivo y lo guarda como PDF en output_path.

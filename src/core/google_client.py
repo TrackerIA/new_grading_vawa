@@ -2,6 +2,9 @@ import os
 import logging
 import gspread
 from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials as OAuthCredentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from src.config import Config
 
@@ -24,7 +27,9 @@ class GoogleClientManager:
         if self._initialized:
             return
         self._creds = None
+        self._oauth_creds = None
         self._drive_service = None
+        self._oauth_drive_service = None
         self._sheets_client = None
         self._initialized = True
 
@@ -60,14 +65,74 @@ class GoogleClientManager:
             creds = self._get_creds()
             self._sheets_client = gspread.authorize(creds)
         return self._sheets_client
+    
+    def _get_oauth_creds(self):
+        """Carga las credenciales OAuth del usuario (token.json)."""
+        if not self._oauth_creds:
+            try:
+                logger.info("Cargando credenciales OAuth desde token.json...")
+                
+                # Intentar cargar el token existente
+                if os.path.exists(Config.TOKEN_FILE):
+                    self._oauth_creds = OAuthCredentials.from_authorized_user_file(
+                        Config.TOKEN_FILE, Config.OAUTH_SCOPES
+                    )
+                    
+                    # Si el token ha expirado, intentar refrescarlo
+                    if self._oauth_creds and self._oauth_creds.expired and self._oauth_creds.refresh_token:
+                        logger.info("Refrescando token OAuth...")
+                        self._oauth_creds.refresh(Request())
+                        
+                        # Guardar el token refrescado
+                        with open(Config.TOKEN_FILE, 'w') as token:
+                            token.write(self._oauth_creds.to_json())
+                        logger.info("Token OAuth refrescado exitosamente.")
+                    elif self._oauth_creds and self._oauth_creds.valid:
+                        logger.info("Token OAuth válido encontrado.")
+                    else:
+                        # Token inválido, necesitamos reautenticar
+                        logger.warning("Token OAuth inválido, iniciando nueva autenticación...")
+                        self._oauth_creds = None
+                
+                # Si no hay token válido, iniciar el flujo OAuth
+                if not self._oauth_creds:
+                    logger.info("Iniciando flujo OAuth...")
+                    if not os.path.exists(Config.OAUTH_CREDENTIALS_FILE):
+                        raise FileNotFoundError(
+                            f"No se encontró el archivo de credenciales OAuth: {Config.OAUTH_CREDENTIALS_FILE}"
+                        )
+                    
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        Config.OAUTH_CREDENTIALS_FILE, 
+                        Config.OAUTH_SCOPES
+                    )
+                    self._oauth_creds = flow.run_local_server(port=0)
+                    
+                    # Guardar las credenciales para la próxima ejecución
+                    with open(Config.TOKEN_FILE, 'w') as token:
+                        token.write(self._oauth_creds.to_json())
+                    logger.info("Token OAuth guardado exitosamente.")
+                
+            except Exception as e:
+                logger.error(f"Error cargando credenciales OAuth: {e}")
+                raise
+        return self._oauth_creds
+    
+    def get_oauth_drive_service(self):
+        """Retorna el servicio de Google Drive API v3 usando OAuth (usuario)."""
+        if not self._oauth_drive_service:
+            creds = self._get_oauth_creds()
+            self._oauth_drive_service = build('drive', 'v3', credentials=creds)
+        return self._oauth_drive_service
         
     def upload_file(self, file_path, file_metadata, mime_type='text/markdown'):
         """
-        Helper para subir archivos. Si el método 'create' no está disponible
-        directamente en el servicio, usamos este helper.
+        Helper para subir archivos usando OAuth (usuario) para evitar
+        problemas de cuota de almacenamiento con Service Accounts.
         """
         from googleapiclient.http import MediaFileUpload
-        service = self.get_drive_service()
+        # Usar OAuth Drive service en lugar de Service Account
+        service = self.get_oauth_drive_service()
         
         media_body = MediaFileUpload(file_path, mimetype=mime_type, resumable=True)
         

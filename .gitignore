@@ -27,5 +27,6 @@ config/client_secret_*.json
 *.pdf
 *.txt
 Fundamentos/*
-
+!requirements.txt
+ 
 

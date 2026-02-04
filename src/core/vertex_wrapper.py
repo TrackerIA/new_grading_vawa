@@ -4,6 +4,19 @@ import vertexai
 from vertexai.preview.caching import CachedContent
 from vertexai.generative_models import GenerativeModel, Part
 from src.config import Config
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log
+)
+from google.api_core.exceptions import (
+    GoogleAPIError,
+    InternalServerError,
+    ServiceUnavailable,
+    TooManyRequests
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +40,23 @@ class VertexWrapper:
             logger.error(f"Error inicializando Vertex AI: {e}")
             raise
 
+    @retry(
+        stop=stop_after_attempt(Config.MAX_RETRIES),
+        wait=wait_exponential(
+            multiplier=1,
+            min=Config.RETRY_MIN_WAIT,
+            max=Config.RETRY_MAX_WAIT
+        ),
+        retry=retry_if_exception_type((
+            GoogleAPIError,
+            InternalServerError,
+            ServiceUnavailable,
+            TooManyRequests,
+            TimeoutError,
+            ConnectionError
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING)
+    )
     def create_cache(self, cache_name, file_paths, system_instruction, ttl_hours=12):
         """
         Crea un contexto en caché con los documentos PDF proporcionados.

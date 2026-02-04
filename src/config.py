@@ -15,7 +15,8 @@ class Config:
     OUTPUT_DIR = BASE_DIR / "output"
     
     # Archivos de credenciales
-    CREDENTIALS_FILE = BASE_DIR / "credentials.json"
+    CREDENTIALS_FILE = BASE_DIR / "credentials.json"  # Service Account
+    OAUTH_CREDENTIALS_FILE = BASE_DIR / "client_secret_907757756276-qu2lj8eh0cp49c1oeqqumh8j1412295v.apps.googleusercontent.com.json"  # OAuth
     TOKEN_FILE = BASE_DIR / "token.json"
 
     # 2. Carga de variables de entorno
@@ -31,14 +32,29 @@ class Config:
     DRIVE_OUTPUT_FOLDER_ID = os.getenv("DRIVE_OUTPUT_FOLDER_ID")
     
     # 5. Scopes (Permisos)
-    # Agregamos cloud-platform para que Vertex funcione sin problemas
-    SCOPES = [
+    # Service Account: Necesita cloud-platform para Vertex AI
+    SERVICE_ACCOUNT_SCOPES = [
         'https://www.googleapis.com/auth/drive',
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/cloud-platform'
     ]
+    
+    # OAuth (Usuario): Solo necesita Drive y Sheets para uploads
+    OAUTH_SCOPES = [
+        'https://www.googleapis.com/auth/drive',
+        'https://www.googleapis.com/auth/spreadsheets'
+    ]
+    
+    # Para compatibilidad con código existente (Vertex usa service account)
+    SCOPES = SERVICE_ACCOUNT_SCOPES
 
-    # 6. URLs de Documentación y Prompts (Definidos por el usuario)
+    # 6. Configuración de Timeouts y Reintentos para IA
+    API_TIMEOUT_SECONDS = 240  # Timeout para llamadas a IA (evita cuelgues)
+    MAX_RETRIES = 5           # Número máximo de reintentos
+    RETRY_MIN_WAIT = 1        # Segundos mínimos entre reintentos
+    RETRY_MAX_WAIT = 60       # Segundos máximos entre reintentos
+
+    # 7. URLs de Documentación y Prompts (Definidos por el usuario)
     URL_SYSTEM_INSTRUCTIONS = "https://docs.google.com/document/d/1QsCOdhuV0N-gbujvloZFBKmMKlPRpHc4LNRY8qCMb18/edit?usp=sharing"
     
     URL_PROMPT_QUALIFYING = "https://docs.google.com/document/d/1hN5A0vZukBqMln85fAT6PkU9lKXY8qcAKyhl-d3mJUA/edit?usp=sharing"

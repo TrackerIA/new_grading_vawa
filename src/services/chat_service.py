@@ -1,10 +1,24 @@
 import logging
 import time
+import concurrent.futures
 from vertexai.generative_models import Part
 from src.config import Config
 from src.core.google_client import google_manager
 from src.core.vertex_wrapper import vertex_client
 from src.utils.drive_tools import get_id_from_url
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log
+)
+from google.api_core.exceptions import (
+    GoogleAPIError,
+    InternalServerError,
+    ServiceUnavailable,
+    TooManyRequests
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +32,20 @@ class ChatService:
         self.model = None
         self.chat_session = None
 
+    @retry(
+        stop=stop_after_attempt(Config.MAX_RETRIES),
+        wait=wait_exponential(
+            multiplier=1,
+            min=Config.RETRY_MIN_WAIT,
+            max=Config.RETRY_MAX_WAIT
+        ),
+        retry=retry_if_exception_type((
+            GoogleAPIError,
+            TimeoutError,
+            ConnectionError
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING)
+    )
     def _fetch_doc_text(self, url):
         """Descarga el contenido de texto de un Google Doc dado su URL."""
         try:
@@ -82,7 +110,7 @@ class ChatService:
 
         flow_steps = [
             ("Qualifying Relationship", Config.URL_PROMPT_QUALIFYING, True), # True = enviar archivos aquí
-            ("Good Faith Character (GFC)", Config.URL_PROMPT_GFM, False),
+            ("Good Faith Marriage (GFM)", Config.URL_PROMPT_GFM, False),
             ("Joint Residence", Config.URL_PROMPT_JOINT_RESIDENCE, False),
             ("GMC / Permanent Bar", Config.URL_PROMPT_GMC_PB, False),
             ("Presence of Abuse", Config.URL_PROMPT_ABUSE, False),
@@ -110,8 +138,8 @@ class ChatService:
                         message_parts.append(Part.from_data(data=pdf_data, mime_type="application/pdf"))
 
                 # 3. Enviar a Vertex
-                # Retries simples por si Vertex tiene un 'hiccup'
-                response = self._send_message_with_retry(message_parts)
+                # Reintentos con timeout para evitar cuelgues
+                response = self._send_message_with_timeout(message_parts)
                 
                 logger.info(f"Paso {step_name} completado.")
                 # Opcional: Podríamos guardar respuestas intermedias si quisieras debuggear
@@ -136,17 +164,35 @@ class ChatService:
             logger.error(f"Error crítico en el flujo de grading: {e}")
             raise
 
-    def _send_message_with_retry(self, content, retries=3):
-        """Envía mensaje al chat con reintentos exponenciales."""
-        for i in range(retries):
+    @retry(
+        stop=stop_after_attempt(Config.MAX_RETRIES),
+        wait=wait_exponential(
+            multiplier=1,
+            min=Config.RETRY_MIN_WAIT,
+            max=Config.RETRY_MAX_WAIT
+        ),
+        retry=retry_if_exception_type((
+            GoogleAPIError,
+            InternalServerError,
+            ServiceUnavailable,
+            TooManyRequests,
+            TimeoutError,
+            ConnectionError
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING)
+    )
+    def _send_message_with_timeout(self, content):
+        """
+        Envía mensaje al chat con timeout para evitar cuelgues.
+        Usa ThreadPoolExecutor para compatibilidad con Windows.
+        """
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(self.chat_session.send_message, content)
             try:
-                return self.chat_session.send_message(content)
-            except Exception as e:
-                if i == retries - 1:
-                    raise
-                wait = 2 ** i
-                logger.warning(f"Error en envío a Vertex: {e}. Reintentando en {wait}s...")
-                time.sleep(wait)
+                return future.result(timeout=Config.API_TIMEOUT_SECONDS)
+            except concurrent.futures.TimeoutError:
+                logger.error(f"Timeout excedido ({Config.API_TIMEOUT_SECONDS}s) en envío a Vertex AI")
+                raise TimeoutError(f"La llamada a Vertex AI excedió {Config.API_TIMEOUT_SECONDS} segundos")
 
 # Instancia global
 chat_service = ChatService()
