@@ -1,0 +1,81 @@
+import logging
+import datetime
+import vertexai
+from vertexai.preview.caching import CachedContent
+from vertexai.generative_models import GenerativeModel, Part
+from src.config import Config
+
+logger = logging.getLogger(__name__)
+
+class VertexWrapper:
+    """
+    Wrapper para manejar Vertex AI y el sistema de Caching.
+    Implementa la lógica de 'GestorCache' adaptada al proyecto.
+    """
+
+    def __init__(self):
+        self.project_id = Config.PROJECT_ID
+        self.location = Config.LOCATION
+        self._init_vertex()
+
+    def _init_vertex(self):
+        """Inicializa la conexión con Vertex AI."""
+        try:
+            vertexai.init(project=self.project_id, location=self.location)
+            logger.info(f"Vertex AI inicializado en {self.project_id} ({self.location})")
+        except Exception as e:
+            logger.error(f"Error inicializando Vertex AI: {e}")
+            raise
+
+    def create_cache(self, cache_name, file_paths, system_instruction, ttl_hours=12):
+        """
+        Crea un contexto en caché con los documentos PDF proporcionados.
+        """
+        logger.info(f"Creando caché '{cache_name}' con {len(file_paths)} documentos...")
+        
+        parts = []
+        for path in file_paths:
+            try:
+                with open(path, "rb") as f:
+                    data = f.read()
+                # Asumimos PDF por defecto dado el requerimiento
+                mime_type = "application/pdf"
+                parts.append(Part.from_data(data=data, mime_type=mime_type))
+                logger.debug(f"Documento cargado para caché: {path}")
+            except Exception as e:
+                logger.error(f"No se pudo leer el archivo {path}: {e}")
+                raise
+
+        try:
+            # Crear el caché usando la API de preview
+            cache = CachedContent.create(
+                model_name="gemini-2.5-flash", # Modelo recomendado para producción/contexto largo
+                display_name=cache_name,
+                system_instruction=system_instruction,
+                contents=parts,
+                ttl=datetime.timedelta(hours=ttl_hours)
+            )
+            logger.info(f"Caché creado exitosamente. Expira: {cache.expire_time}")
+            return cache
+        except Exception as e:
+            logger.error(f"Error creando CachedContent en Vertex: {e}")
+            raise
+
+    def get_model_from_cache(self, cache_name_or_obj):
+        """
+        Devuelve una instancia de GenerativeModel conectada al caché.
+        """
+        try:
+            # Si recibimos el objeto caché directo
+            if isinstance(cache_name_or_obj, CachedContent):
+                return GenerativeModel.from_cached_content(cached_content=cache_name_or_obj)
+            
+            # TODO: Si en el futuro necesitas recuperar por nombre (string),
+            # aquí implementaríamos la lógica de listar y buscar por display_name.
+            pass
+        except Exception as e:
+            logger.error(f"Error instanciando modelo desde caché: {e}")
+            raise
+
+# Instancia global para uso fácil
+vertex_client = VertexWrapper()
