@@ -142,16 +142,22 @@ class ChatService:
                 response = self._send_message_with_timeout(message_parts)
                 
                 logger.info(f"Paso {step_name} completado.")
-                # Opcional: Podríamos guardar respuestas intermedias si quisieras debuggear
-                # full_history_log.append(f"--- {step_name} ---\n{response.text}\n")
+                
+                # --- CORRECCIÓN AQUÍ: Acumular la respuesta en el historial ---
+                # Agregamos un encabezado para separar visualmente cada sección en el Markdown
+                step_content = f"\n\n# --- {step_name} ---\n\n{response.text}"
+                full_history_log.append(step_content)
                 
                 # Pequeña pausa para no saturar si es muy rápido
                 time.sleep(1)
 
-            # La respuesta del último paso (Auditoria) es la que nos importa para el entregable
-            final_text = response.text
+            # --- CORRECCIÓN AQUÍ: Unir todo el historial en lugar de solo la última respuesta ---
+            final_text = "\n".join(full_history_log)
             
-            # Obtener métricas de uso (aprox)
+            # Obtener métricas de uso (aprox) del último turno 
+            # (Nota: Vertex da el uso por turno, para ser exactos deberías sumar todos,
+            # pero por simplicidad mantenemos la estructura actual o tomamos el acumulado si la API lo permite.
+            # Aquí dejamos el del último request como referencia o podrías sumar si lo deseas).
             usage = response.usage_metadata
             token_counts = {
                 "input": usage.prompt_token_count,
