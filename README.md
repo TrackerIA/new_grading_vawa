@@ -12,7 +12,8 @@ Como apoyo para los colaboradores del área de CCC, esta categorización está c
 
 # Diagrama de flujo
 
-<img width="3105" height="1479" alt="GRADINGVAWAWORKFLOW drawio (1)" src="https://github.com/user-attachments/assets/ffa7d4d5-c476-4609-9204-2ab350d417fd" />
+<img width="3105" height="1479" alt="GRADINGVAWAWORKFLOW drawio (1)" src="https://github.com/user-attachments/assets/22084344-d6ce-43b3-9561-ce70ba1fb8b1" />
+
 
 El diagrama de flujo representado arriba muestra el proceso para analizar casos una vez están en una spreadsheet especfica.
 
