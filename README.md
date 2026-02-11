@@ -33,18 +33,56 @@ Existen algunas condiciones que se deben de cumplir de manera obligatoria para p
 </div>
 
 # Ejemplo de archivo '.env'
-
+```bash
 ### Configuración de Google Cloud Project (Vertex AI)
-PROJECT_ID=ID_PROJECT<br/>
-LOCATION=us-west1 <br/>
+PROJECT_ID=ID_PROJECT
+LOCATION=us-west1 
 
 ### Credenciales
-GOOGLE_APPLICATION_CREDENTIALS=credentials.json <br/>
+GOOGLE_APPLICATION_CREDENTIALS=credentials.json
 
 ### Configuración de Google Sheets
-SPREADSHEET_ID=ID_SPREADSHEET <br/>
-SHEET_NAME=NAME_SHEET <br/>
+SPREADSHEET_ID=ID_SPREADSHEET
+SHEET_NAME=NAME_SHEET
 
 ### Configuración de Google Drive
-DRIVE_OUTPUT_FOLDER_ID=ID_FOLDER <br/>
+DRIVE_OUTPUT_FOLDER_ID=ID_FOLDER
+```
+# Quick Start
+
+Sigue estos pasos para configurar y ejecutar el analizador en tu ordenador.
+
+### 1. Clonar el Repositorio
+```bash
+git clone <URL_DE_TU_REPOSITORIO>
+cd <NOMBRE_DE_TU_CARPETA>
+```
+### 2. Preparar el Entorno Virtual (Recomendado)
+```bash
+# Crear entorno virtual
+python -m venv venv
+
+# Activar entorno (Windows)
+.\venv\Scripts\activate
+
+# Activar entorno (Mac/Linux)
+source venv/bin/activate
+```
+### 3. Instalar dependencias
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configurar Credenciales y Entorno
+Este es el paso más importante para que el sistema tenga acceso a tus herramientas de Google Cloud.
+
+Archivo de Identidad: Coloca tu archivo credentials.json (Service Account) directamente en la carpeta raíz del proyecto.
+
+Variables de Control: Crea un archivo llamado .env basándote en la sección de ejemplo de este README y completa los IDs de tu Spreadsheet y Drive.
+
+Permisos de Acceso: Abre tu archivo credentials.json, busca el campo "client_email" y copia esa dirección de correo.
+
+> [!IMPORTANT]
+> **Acceso Compartido:** Debes entrar a tu Google Sheet y a tu carpeta de Google Drive, hacer clic en "Compartir" y agregar el correo de la Service Account con el rol de Editor. Sin esto, la IA no podrá leer las transcripciones ni escribir los resultados.
+
 
